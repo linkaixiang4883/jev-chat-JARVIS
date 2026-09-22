@@ -36,13 +36,13 @@
 
 ## 快速开始
 
-**1. 装包。** 仓库里有签好名的 release 包：[`apk/jev-assistant-v1.2-release.apk`](apk/jev-assistant-v1.2-release.apk)（Android 11+）。
+**1. 装包。** 仓库里有签好名的 release 包：**[`apk/jev-assistant-v1.3-release.apk`](apk/jev-assistant-v1.3-release.apk)**（Android 9+，含接入商改造：Zen 免费 Jev + Go 起草）。历史包 [`apk/jev-assistant-v1.2-release.apk`](apk/jev-assistant-v1.2-release.apk) 仍是旧接入商（OpenRouter）版、Android 11+。⚠️ **v1.3 换了新的签名密钥**：从 v1.2 或更早版本升级**必须先卸载**（`adb uninstall com.jev.probe`）再装，否则报签名冲突。
 
 ```bash
-adb install -r apk/jev-assistant-v1.2-release.apk
+adb install -r apk/jev-assistant-v1.3-release.apk
 ```
 
-**2. 填密钥。** 打开 App → 设置 → 填你自己的 [OpenRouter](https://openrouter.ai/) API Key；回复模型默认 `deepseek/deepseek-chat-v3.1`（国内 Gemini / OpenAI 会被区域限制）。
+**2. 填密钥。** 打开 App → 设置 → 填你自己的 [OpenCode](https://opencode.ai/auth) API Key（**一把 key 同时用于**：Zen 上的免费 Jev 判断 + Go 上的候选起草）。默认 Jev 后端就是 Zen 免费档 `jev-1.13-free`；想走 TypeSafe 官方就把后端切成 TypeSafe 并填 `TYPESAFE_API_KEY`（[console.typesafe.ai](https://console.typesafe.ai) 申请）。回复模型默认 `glm-5.3-flash`（OpenCode Go；国内直连、不用代理）。
 
 **3. 开权限。** 按主页向导开三项：
 - 无障碍（读消息）
@@ -68,8 +68,8 @@ adb install -r apk/jev-assistant-v1.2-release.apk
 ```
 
 - **采集**：一个 App 一个适配器，服务按前台包名分发。适配器只负责把当前窗口变成「标题 + 消息列表（谁说的、说了什么）」，下游全部通用。
-- **判断**：[Jev](https://docs.typesafe.ai/) 只回答选择 / 打分 / 是非，一次请求发全部题目，约 1 秒返回。
-- **回复**：生成模型起草 3 条候选，Jev 排序。
+- **判断**：[Jev](https://docs.typesafe.ai/)（System One 判断模型）走 **OpenCode Zen 免费档**：`POST /zen/v1/systemone`，模型 `jev-1.13-free`；也可在设置里切 **TypeSafe 官方接口**（`POST https://api.typesafe.ai/v1/systemone`，模型 `jev-latest`）。只回答选择 / 打分 / 是非，一次请求发全部题目。
+- **回复**：**OpenCode Go** 的生成模型起草 3 条候选（默认 `glm-5.3-flash`，请求带 `x-opencode-session` 头），Jev 排序。
 - **回填**：`ACTION_SET_TEXT`，失败则剪贴板 + `ACTION_PASTE`，不发送。
 
 ## 适配一个新的聊天 App
@@ -100,6 +100,8 @@ JDK 17 + Android SDK（platform 35 / build-tools 35）。
 
 ## 已知限制
 
+- **接入商（v1.3 起）**：判断走 **OpenCode Zen 免费档**（`POST /zen/v1/systemone`，模型 `jev-1.13-free`）或 **TypeSafe 官方**（`POST https://api.typesafe.ai/v1/systemone`，模型 `jev-latest`，需自备 key）；生成走 **OpenCode Go**（默认 `glm-5.3-flash`，每月 $60 额度，请求必须带 `x-opencode-session`）。OpenRouter 已移除。
+- **升级提醒**：v1.2 → v1.3 的密钥存储键变了 —— 升级后需在设置里重填 key（旧 key 不迁移）。
 - **国产 ROM 后台冻结**：小米 / HyperOS 会杀后台进程，前台保活、自启动、省电无限制都配了仍可能被杀，气泡短暂消失，在聊天里再交互一下自愈。
 - **飞书正文**：自绘控件，不在无障碍树里，目前只能分析到文档卡片等带 TextView 的内容，正文要补「`takeScreenshot()` 裁气泡 + ML Kit 中文识别」；左对齐布局下我 / 对方也不能按左右判。
 - **X 只按中文界面验过**：分隔符 `：`、`上午 / 下午`、`Read` 是中文界面实测；英文界面只做了兜底，未验。

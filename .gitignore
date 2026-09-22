@@ -19,6 +19,7 @@ gradle.properties.local
 
 # Dev artifacts / reports (not part of the product)
 /_reports/
+/.hermes/
 /tools/jev/report/
 /tools/jev/__pycache__/
 **/__pycache__/
