@@ -40,6 +40,8 @@
   - ⇒ 删 `CLAUDE.md` 无意义（下次 merge 会回来，遮蔽已生效）；它里面想留的硬约束/实测背景要**合并进本文件**，而不是去改它。
   - ⇒ 会话中途新建/删除这些文件对**当前**会话无效（系统提示词每会话只构建一次，仅压缩边界可能重建）——看到旧文件内容属正常，下一会话才换。
 - 交付报告写 `_reports/<任务名>_report.md`：做法与证据 → 逐条文件清单 → 验收命令的**真实输出** → 自验缺口。建者不自证，不许编输出。
+- **提交身份（2026-09-22 踩过）**：本仓库历史里的 `Vikicc / Finderchangchang <1031066280@qq.com>` 是**原作者本人**（老提交可用 `git rev-list --count upstream/main..<sha>` 验证全来自上游）——**绝不要用这个身份提交我们的工作**（那是冒用）。本地 config 已设为我们自己的身份：`linkaixiang4883 <28226678+linkaixiang4883@users.noreply.github.com>`（GitHub 官方 noreply；id 用 `api.github.com/users/<login>` 取）。**推送到裸 URL 时 `--force-with-lease` 会报 `stale info`**，要用显式租约：`git push --force-with-lease=refs/heads/main:<远端当前 sha> git@github.com:<owner>/<repo>.git main`。
+- **上游同步状态**：作者仓库 `Finderchangchang/jev-chat-JARVIS` 持续更新（本 fork 落后 36 个提交，2026-09-22 计）；同步上游时注意 README/AGENTS 会冲突，按「我们的口径优先、上游新内容合并」处理。
 
 ## 构建与测试
 
