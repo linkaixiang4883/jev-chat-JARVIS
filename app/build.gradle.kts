@@ -24,6 +24,13 @@ android {
         targetSdk = 35
         versionCode = 4
         versionName = "1.3"
+
+        // ML Kit's bundled Chinese recognizer ships native libs for every ABI.
+        // The target phones are arm64, so keep only that one — the other three
+        // are dead weight.（本 fork 保留 minSdk 28：测试机 MI 8 是 Android 9）
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     signingConfigs {
@@ -44,6 +51,15 @@ android {
         }
     }
 
+    // Uncompressed, page-aligned .so files: required for the 16 KB page-size
+    // devices Android 15+ ships, and it lets the loader mmap the ML Kit natives
+    // instead of unpacking them at install time.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -59,6 +75,9 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-    // 唯一新增：测试期依赖（JevEndpoints 的路由/键选择需要单测；不进 APK）
+    // On-device OCR. The *bundled* Chinese model (not the play-services variant):
+    // it works on phones with no Google Play services and needs no model download.
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    // 本 fork 的单测依赖（JevEndpoints 路由层单测）；仅测试期，不进 APK
     testImplementation("junit:junit:4.13.2")
 }

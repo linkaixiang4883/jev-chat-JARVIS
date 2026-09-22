@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(22), dp(18), dp(28))
         }
+        container.padForSystemBars()   // edge-to-edge: keep the title off the status bar
         scroll.addView(container)
         setContentView(scroll)
     }
@@ -67,7 +68,7 @@ class MainActivity : AppCompatActivity() {
 
         val a11y = isA11yEnabled()
         val overlay = Settings.canDrawOverlays(this)
-        val key = prefs.hasKeys()
+        val key = prefs.hasKey()   // judge route key: the one analysis cannot run without
         val ready = a11y && overlay && key
 
         // Readiness card
@@ -115,6 +116,12 @@ class MainActivity : AppCompatActivity() {
         c.addView(checkLine("无障碍", a11y))
         c.addView(checkLine("悬浮窗", overlay))
         c.addView(checkLine("密钥", key, okWord = "已设", noWord = "未设"))
+        // History recording is opt-in (off by default). Mention it here, never block on it.
+        if (!prefs.contextEnabled) {
+            c.addView(text("关联上下文未开启，可在设置里开启", 12f, sub).apply {
+                setPadding(0, dp(8), 0, 0)
+            })
+        }
         return c
     }
 
