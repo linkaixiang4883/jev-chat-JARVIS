@@ -21,6 +21,7 @@ import com.jev.probe.core.ChatSnapshot
 import com.jev.probe.core.Msg
 import com.jev.probe.core.Prefs
 import com.jev.probe.jev.JevClient
+import com.jev.probe.jev.JevEndpoints
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
@@ -54,10 +55,22 @@ class SettingsActivity : AppCompatActivity() {
         // --- 接口 ---
         root.addView(section("接口"))
         val card1 = card()
-        card1.addView(label("OpenRouter 密钥"))
-        val keyEdit = edit(prefs.openRouterKey, "sk-or-v1-...", password = true)
+        card1.addView(label("OpenCode API Key（Zen 的 Jev + Go 的起草共用；sk- 开头）"))
+        val keyEdit = edit(prefs.opencodeKey, "sk-...", password = true)
         card1.addView(keyEdit)
-        card1.addView(label("回复生成模型"))
+        card1.addView(label("Jev 判断后端"))
+        val provRow = toggleRow(
+            "点一下切换后端", prefs.jevProvider == JevEndpoints.PROVIDER_TYPESAFE,
+            onWord = "TypeSafe 官方", offWord = "Zen 免费"
+        )
+        card1.addView(provRow)
+        card1.addView(label("TypeSafe API Key（后端选 TypeSafe 时才需要；console.typesafe.ai 申请）"))
+        val tsEdit = edit(prefs.typesafeKey, "ts-...", password = true)
+        card1.addView(tsEdit)
+        card1.addView(label("Jev 模型（留空 = 按后端取默认）"))
+        val jevModelEdit = edit(prefs.jevModel, "jev-1.13-free / jev-latest")
+        card1.addView(jevModelEdit)
+        card1.addView(label("回复生成模型（OpenCode Go）"))
         val modelEdit = edit(prefs.replyModel, Prefs.DEFAULT_REPLY_MODEL)
         card1.addView(modelEdit)
         root.addView(card1)
@@ -99,7 +112,11 @@ class SettingsActivity : AppCompatActivity() {
         // --- Actions ---
         val result = text("", 13f, sub).apply { setPadding(0, dp(12), 0, dp(4)) }
         root.addView(primaryBtn("保存") {
-            prefs.openRouterKey = keyEdit.text.toString()
+            prefs.opencodeKey = keyEdit.text.toString()
+            prefs.typesafeKey = tsEdit.text.toString()
+            prefs.jevProvider =
+                if ((provRow.tag as? Boolean) == true) JevEndpoints.PROVIDER_TYPESAFE else JevEndpoints.PROVIDER_ZEN
+            prefs.jevModel = jevModelEdit.text.toString()
             prefs.replyModel = modelEdit.text.toString().ifBlank { Prefs.DEFAULT_REPLY_MODEL }
             prefs.relationship = relEdit.text.toString().ifBlank { Prefs.DEFAULT_REL }
             prefs.whitelist = wlEdit.text.toString().split("\n").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -108,14 +125,21 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, "已保存", Toast.LENGTH_SHORT).show()
         })
         root.addView(secondaryBtn("连通测试") {
-            val key = keyEdit.text.toString().trim()
-            val model = modelEdit.text.toString().trim().ifBlank { Prefs.DEFAULT_REPLY_MODEL }
-            if (key.isBlank()) { result.text = "请先填密钥"; return@secondaryBtn }
-            result.text = "测试中…"
+            prefs.opencodeKey = keyEdit.text.toString()
+            prefs.typesafeKey = tsEdit.text.toString()
+            prefs.jevProvider =
+                if ((provRow.tag as? Boolean) == true) JevEndpoints.PROVIDER_TYPESAFE else JevEndpoints.PROVIDER_ZEN
+            prefs.jevModel = jevModelEdit.text.toString()
+            prefs.replyModel = modelEdit.text.toString().ifBlank { Prefs.DEFAULT_REPLY_MODEL }
+            if (!prefs.hasKeys()) {
+                result.text = "请先填密钥（OpenCode 必备；后端选 TypeSafe 时还要 TypeSafe key）"
+                return@secondaryBtn
+            }
+            result.text = "测试中（${prefs.jevProvider} · ${JevEndpoints.jevModel(prefs.jevProvider, prefs.jevModel)}）…"
             worker.execute {
                 val demo = ChatSnapshot("连通测试", listOf(
                     Msg("other", "在吗？"), Msg("me", "在"), Msg("other", "那你说说昨天答应我的事")))
-                val a = JevClient(key, model).analyze(demo, prefs.relationship)
+                val a = JevClient.fromPrefs(prefs).analyze(demo, prefs.relationship)
                 main.post {
                     result.text = if (a.error != null) "失败：${a.error}"
                     else "成功：意图=${a.trueIntent?.choice ?: "?"}，候选=${a.rankedReplies.size} 条，耗时 ${a.latencyMs}ms"
@@ -127,7 +151,7 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(scroll)
     }
 
-    private fun toggleRow(labelText: String, initial: Boolean): LinearLayout {
+    private fun toggleRow(labelText: String, initial: Boolean, onWord: String = "开", offWord: String = "关"): LinearLayout {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(12), 0, dp(2)); tag = initial
@@ -136,7 +160,7 @@ class SettingsActivity : AppCompatActivity() {
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         }
         val sw = TextView(this).apply {
-            text = if (initial) "开" else "关"; textSize = 13f; gravity = Gravity.CENTER
+            text = if (initial) onWord else offWord; textSize = 13f; gravity = Gravity.CENTER
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(if (initial) Color.WHITE else sub)
             background = round(dp(10), if (initial) accent else Color.parseColor("#E5E7EB"))
@@ -144,7 +168,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         sw.setOnClickListener {
             val now = !((row.tag as? Boolean) ?: true); row.tag = now
-            sw.text = if (now) "开" else "关"
+            sw.text = if (now) onWord else offWord
             sw.setTextColor(if (now) Color.WHITE else sub)
             sw.background = round(dp(10), if (now) accent else Color.parseColor("#E5E7EB"))
         }

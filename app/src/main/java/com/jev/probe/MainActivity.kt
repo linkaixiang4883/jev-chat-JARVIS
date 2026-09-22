@@ -67,7 +67,7 @@ class MainActivity : AppCompatActivity() {
 
         val a11y = isA11yEnabled()
         val overlay = Settings.canDrawOverlays(this)
-        val key = prefs.hasKey()
+        val key = prefs.hasKeys()
         val ready = a11y && overlay && key
 
         // Readiness card

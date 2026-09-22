@@ -4,6 +4,7 @@ import android.util.Log
 import com.jev.probe.core.Analysis
 import com.jev.probe.core.ChatSnapshot
 import com.jev.probe.core.Choice
+import com.jev.probe.core.Prefs
 import com.jev.probe.core.RankedReply
 import com.jev.probe.core.Score
 import org.json.JSONArray
@@ -15,26 +16,35 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Talks to OpenRouter: one generative call to draft 3 candidate replies, then a
- * single Jev "decisions" call carrying all 7 judgment questions plus the ranking
- * question (speculative fan-out). Uses HttpURLConnection only (no deps).
- *
- * The key is passed in per call; it is never logged.
+ * 后端拓扑（2026-09-22 改造后，细节见 AGENTS.md「架构与数据流」）：
+ *  - Jev 判断：OpenCode Zen（/zen/v1/systemone，默认免费 jev-1.13-free）或 TypeSafe 官方（/v1/systemone）
+ *  - 候选起草：OpenCode Go（/zen/go/v1/chat/completions，必带 x-opencode-session）
+ * 只用 HttpURLConnection + org.json（零依赖）；key 逐次传入，永不落日志。
  */
-class JevClient(private val key: String, private val replyModel: String) {
+class JevClient(private val cfg: ProviderConfig) {
 
-    private val decisionsUrl = "https://openrouter.ai/api/alpha/decisions"
-    private val chatUrl = "https://openrouter.ai/api/v1/chat/completions"
+    data class ProviderConfig(
+        val jevProvider: String,
+        val jevModel: String,
+        val replyModel: String,
+        val opencodeKey: String,
+        val typesafeKey: String,
+        val sessionId: String,
+    )
+
+    private fun systemOneRoute(): JevEndpoints.Route = JevEndpoints.systemOne(cfg.jevProvider)
+
+    private fun jevKey(): String = JevEndpoints.keyFor(cfg.jevProvider, cfg.opencodeKey, cfg.typesafeKey)
 
     /** The 7 judgment questions only (fast, ~1s). No candidate generation. */
     fun judge(snapshot: ChatSnapshot, relationship: String): Analysis {
         val start = System.currentTimeMillis()
         try {
             val body = JSONObject()
-                .put("model", "typesafe/jev-1.13")
+                .put("model", cfg.jevModel)
                 .put("state", JevQuestions.buildState(snapshot, relationship))
                 .put("questions", JevQuestions.judge())
-            val answers = postJson(decisionsUrl, body).optJSONObject("answers") ?: JSONObject()
+            val answers = postJson(systemOneRoute(), jevKey(), body).optJSONObject("answers") ?: JSONObject()
             return Analysis(
                 trueIntent = parseChoice(answers.optJSONObject("true_intent")),
                 dangerLevel = parseScore(answers.optJSONObject("danger_level")),
@@ -59,10 +69,10 @@ class JevClient(private val key: String, private val replyModel: String) {
         val questions = JSONObject().put("best_reply",
             JevQuestions.rankQuestion(candidates).getJSONObject("best_reply"))
         val body = JSONObject()
-            .put("model", "typesafe/jev-1.13")
+            .put("model", cfg.jevModel)
             .put("state", JevQuestions.buildState(snapshot, relationship))
             .put("questions", questions)
-        val answers = postJson(decisionsUrl, body).optJSONObject("answers") ?: JSONObject()
+        val answers = postJson(systemOneRoute(), jevKey(), body).optJSONObject("answers") ?: JSONObject()
         return parseRanked(answers.optJSONObject("best_reply"), candidates)
     }
 
@@ -87,10 +97,10 @@ class JevClient(private val key: String, private val replyModel: String) {
             .put(JSONObject().put("role", "system").put("content", sys))
             .put(JSONObject().put("role", "user").put("content", user))
         val body = JSONObject()
-            .put("model", replyModel)
+            .put("model", cfg.replyModel)
             .put("messages", messages)
             .put("temperature", 0.8)
-        val resp = postJson(chatUrl, body)
+        val resp = postJson(JevEndpoints.replyChat(cfg.sessionId, cfg.replyModel), cfg.opencodeKey, body)
         val content = resp.optJSONArray("choices")?.optJSONObject(0)
             ?.optJSONObject("message")?.optString("content") ?: ""
         return parseThree(content)
@@ -142,22 +152,22 @@ class JevClient(private val key: String, private val replyModel: String) {
         return list.sortedByDescending { it.prob }
     }
 
-    /** POST JSON with one retry chain for 429/529 (exponential backoff). */
-    private fun postJson(urlStr: String, body: JSONObject): JSONObject {
+    /** POST JSON + 429/529 退避重试；按 route 打头（自述 UA + Go 的 x-opencode-session）。 */
+    private fun postJson(route: JevEndpoints.Route, key: String, body: JSONObject): JSONObject {
         var attempt = 0
         var lastErr: Exception? = null
         while (attempt < 3) {
             var conn: HttpURLConnection? = null
             try {
-                conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
+                conn = (URL(route.url).openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     connectTimeout = 15000
                     readTimeout = 25000
                     doOutput = true
                     setRequestProperty("Authorization", "Bearer $key")
                     setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("HTTP-Referer", "https://jev-assistant.local")
-                    setRequestProperty("X-Title", "Jev Assistant")
+                    setRequestProperty("User-Agent", JevEndpoints.UA)   // 必带：否则 Cloudflare 1010
+                    route.headers.forEach { (k, v) -> setRequestProperty(k, v) }
                 }
                 val bytes = body.toString().toByteArray(Charsets.UTF_8)
                 conn.outputStream.use { os: OutputStream -> os.write(bytes) }
@@ -187,6 +197,10 @@ class JevClient(private val key: String, private val replyModel: String) {
         val m = e.message ?: e.javaClass.simpleName
         return when {
             m.contains("HTTP 401") -> "密钥无效或未设置（401）"
+            m.contains("HTTP 402") -> "Zen 余额不足：付费 Jev 需充值，或改用免费的 jev-1.13-free"
+            m.contains("MissingSessionID") -> "缺少 x-opencode-session 头（OpenCode Go 端点必须带）"
+            m.contains("FreeTierError") -> "该模型只允许在 OpenCode 客户端内使用；Jev 请用 zen 的 /systemone"
+            m.contains("1010") -> "被 Cloudflare 拦截：User-Agent 必须自述（jev-assistant-android/1.3）"
             m.contains("HTTP 4") -> "请求被拒：$m"
             m.contains("timed out") || m.contains("timeout") -> "网络超时，请检查连接"
             m.contains("Unable to resolve host") || m.contains("Failed to connect") -> "无法连接网络"
@@ -194,5 +208,19 @@ class JevClient(private val key: String, private val replyModel: String) {
         }
     }
 
-    companion object { private const val TAG = "JEVASSIST" }
+    companion object {
+        private const val TAG = "JEVASSIST"
+
+        /** 从设置组装客户端（服务与设置页共用，避免两处构造参数漂移）。 */
+        fun fromPrefs(p: Prefs): JevClient = JevClient(
+            ProviderConfig(
+                jevProvider = p.jevProvider,
+                jevModel = JevEndpoints.jevModel(p.jevProvider, p.jevModel),
+                replyModel = p.replyModel.ifBlank { JevEndpoints.DEFAULT_REPLY_MODEL },
+                opencodeKey = p.opencodeKey,
+                typesafeKey = p.typesafeKey,
+                sessionId = p.opencodeSession,
+            )
+        )
+    }
 }

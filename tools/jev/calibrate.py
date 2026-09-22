@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from jev_client import JevError, ask, redact_secrets  # noqa: E402
+from jev_client import JevError, ask, provider_config, redact_secrets  # noqa: E402
 from questions import JUDGE_QUESTIONS, build_state  # noqa: E402
 
 FIXTURE = ROOT / "fixtures" / "labeled_set.json"
@@ -128,10 +128,10 @@ def usage_of(result: dict) -> dict:
     }
 
 
-def run_case(case: dict) -> dict:
+def run_case(case: dict, provider: str | None = None) -> dict:
     state = build_state(case["messages"], case["relationship"])
     t0 = time.perf_counter()
-    result = ask(state, JUDGE_QUESTIONS, timeout=20)
+    result = ask(state, JUDGE_QUESTIONS, timeout=20, provider=provider)
     latency = time.perf_counter() - t0
     ans = answers_of(result)
     expect = case.get("expect") or {}
@@ -311,13 +311,17 @@ def render_md(summary: dict, rows: list[dict]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Calibrate Jev questions on the labeled set")
     parser.add_argument("--limit", type=int, default=None, help="only run the first N cases")
+    parser.add_argument("--provider", default=None, choices=["zen", "typesafe"],
+                        help="Jev backend (default zen; also read from JEV_PROVIDER)")
     args = parser.parse_args()
 
     cases = load_cases(args.limit)
+    cfg = provider_config(args.provider)
+    print(f"provider={cfg['name']} model={cfg['model']} cases={len(cases)}", flush=True)
     rows: list[dict] = []
     for i, case in enumerate(cases):
         try:
-            row = run_case(case)
+            row = run_case(case, args.provider)
         except JevError as exc:
             row = {
                 "id": case.get("id"),
@@ -339,6 +343,8 @@ def main() -> int:
             time.sleep(SLEEP_BETWEEN)
 
     summary = summarize(rows)
+    summary["provider"] = cfg["name"]
+    summary["model"] = cfg["model"]
     table = render_table(summary)
     print()
     print(table)

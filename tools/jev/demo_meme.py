@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import io
 import json
 import sys
@@ -13,7 +14,7 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from jev_client import ask, redact_secrets  # noqa: E402
+from jev_client import ask, provider_config, redact_secrets  # noqa: E402
 from questions import JUDGE_QUESTIONS, build_rank_question, build_state  # noqa: E402
 
 MESSAGES = [
@@ -56,14 +57,21 @@ def dump_answer(name: str, ans: dict) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Run the screenshot conversation through the full Jev judge + rank flow")
+    parser.add_argument("--provider", default=None, choices=["zen", "typesafe"],
+                        help="Jev backend (default zen; also read from JEV_PROVIDER)")
+    args = parser.parse_args()
+
+    cfg = provider_config(args.provider)
     state = build_state(MESSAGES, "romantic partners")
     questions = dict(JUDGE_QUESTIONS)
     questions.update(build_rank_question(CANDIDATES))
-    result = ask(state, questions, timeout=20)
+    result = ask(state, questions, timeout=20, provider=args.provider)
     answers = result.get("answers") or {}
     usage = result.get("usage") or {}
 
     print("=== demo_meme ===")
+    print(f"provider: {cfg['name']}  model: {cfg['model']}")
     print("relationship: romantic partners")
     for who, text in MESSAGES:
         print(f"  {who}: {text}")
@@ -107,6 +115,8 @@ def main() -> int:
         "answers": answers,
         "usage": usage,
         "provider": result.get("provider"),
+        "backend": cfg["name"],
+        "model": cfg["model"],
     }
     (report_dir / "demo_meme.json").write_text(
         redact_secrets(json.dumps(payload, ensure_ascii=False, indent=2, default=str)),
