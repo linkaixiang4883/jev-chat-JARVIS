@@ -73,7 +73,7 @@ python -m unittest discover -s tools/jev/tests -v   # provider 路由 / 请求�
 
 `calibrate.py` 退出码：`0`=闸门全过，`2`=闸门未达标（`danger_level` MAE < 1.0、`true_intent`/`she_needs` 命中 ≥ 60%），`1`=有请求错误；报告写 `tools/jev/report/calibration.{json,md}`（已 gitignore）。
 
-**测试现状**：Kotlin 侧有 1 个单测 `app/src/test/java/com/jev/probe/jev/JevEndpointsTest.kt`（`./gradlew.bat testDebugUnitTest` → 6 passed；`testImplementation("junit:junit:4.13.2")` 是唯一新增依赖，仅测试期、不进 APK、有单测）。验证 = 构建零 error + 真机冒烟（`docs/acceptance.md` D 节：新消息 ~1.5s 出窗且 ≥3 条已排序候选、填入后未发送、自己发的不触发、切后台悬浮窗隐藏、10 分钟静默期零调用、断网给可读错误不崩、密钥不进 logcat）。**改采集层或填回链路后必须真机跑一遍，别只看编译通过。**
+**测试现状**：**Kotlin 侧没有单测**（上游没有测试设施；本 fork 早先的 `JevEndpointsTest` 随「上游三路架构」合并已删除，junit 测试依赖也一并去掉）。Python 侧有 `tools/jev/tests/`（unittest，6 passed，`python -m unittest discover -s tools/jev/tests -v`）。验证 = 构建零 error + 真机冒烟（`docs/acceptance.md` D 节：新消息 ~1.5s 出窗且 ≥3 条已排序候选、填入后未发送、自己发的不触发、切后台悬浮窗隐藏、10 分钟静默期零调用、断网给可读错误不崩、密钥不进 logcat）。**改采集层或填回链路后必须真机跑一遍，别只看编译通过。**
 
 `docs/acceptance.md` 是公共尺子：A 构建 / B 探针门禁（P1，**已有结论**：伪装服务可读微信 8.0.78 节点，路线 A）/ C 判断层闸门 / D 真机冒烟。
 
@@ -140,14 +140,15 @@ capture/ChatCaptureService.fillInput(text)   （worker 线程，含 sleep 校验
 **启动（依赖顺序）**
 
 1. 系统绑定无障碍服务 → 入口类 `com.google.android.accessibility.selecttospeak.SelectToSpeakService`（伪装类名，全部逻辑继承自 `ChatCaptureService`）。**不要改这个类名或它的 Manifest 注册**——伪装正是微信暴露节点树的原因。
-2. `ChatCaptureService.onServiceConnected()`：`Prefs(this)` → `OverlayController(this)` → 挂 `overlay.onManualAnalyze`（面板「重新分析」回调）。
+2. `ChatCaptureService.onServiceConnected()`：`Prefs(this)` → `OverlayController(this)` → 挂三个面板回调：`onManualAnalyze`（重新分析）、`onSaveContact`（把当前会话存为知识库联系人，worker 上跑 `KbStore.saveOrMergeContact`）、`onOcrCapture`（气泡菜单「截屏识别一次」）。
 3. `KeepAliveService.start(this)`：前台服务（`foregroundServiceType=specialUse` + IMPORTANCE_MIN 常驻通知，`START_STICKY`），把进程抬到前台重要性，抗 MIUI/HyperOS 冻结。
-4. `main.postDelayed(900ms)` 自愈补偿：被 ROM 杀掉后重连时主动跑一次 `maybeCapture()`，气泡自己回来，不必等用户滚动。
-5. 首次捕获 → 去重 → 触发条件通过 → 800ms debounce → `runAnalysis()`。
+4. `submit { MlKitOcr.warmUp() }`：worker 上预热 ML Kit 中文识别客户端，避免首次识别在截屏回调里付初始化开销。
+5. `main.postDelayed(900ms)` 自愈补偿：被 ROM 杀掉后重连时主动跑一次 `maybeCapture()`，气泡自己回来，不必等用户滚动。
+6. 首次捕获 → 去重 → 触发条件通过 → 800ms debounce → `runAnalysis()`；树里读不到正文时走 `capture/ocr/`（ScreenCapture 截屏 → MlKitOcr 中文识别，限频/退避）。
 
 **退出 / 拆解（逆序）**
 
-1. `ChatCaptureService.onDestroy()`：`overlay.onManualAnalyze = null`（切断死后回调，杜绝幽灵点击）→ `overlay.hide()`（`WindowManager.removeView`）→ `overlay = null` → `worker.shutdownNow()`（丢队列；此后 `submit()` 捕 `RejectedExecutionException` 静默丢弃，不崩进程）。
+1. `ChatCaptureService.onDestroy()`：`overlay.onManualAnalyze = null` 与 `overlay.onOcrCapture = null`（切断死后回调，杜绝幽灵点击）→ `overlay.hide()`（`WindowManager.removeView`）→ `overlay = null` → `worker.shutdownNow()`（丢队列；此后 `submit()` 捕 `RejectedExecutionException` 静默丢弃，不崩进程）。
 2. `SettingsActivity.onDestroy()` → `worker.shutdownNow()`。
 3. 悬浮窗：`hide()` 后置空引用；下次 `show*` 由 `ensureRoot()` 懒重建，`Settings.canDrawOverlays=false` 时只打一条日志、不出窗。
 
@@ -251,10 +252,11 @@ HTTP 行为：连接 15s / 读 25s；429、529 退避重试 3 次（500ms×2^att
 
 | 执行体 | 数量 | 职责 | 边界 |
 |---|---|---|---|
-| 主线程（`Handler(Looper.getMainLooper())`，代码里叫 `main`） | 1 | 所有无障碍回调、`maybeCapture`、悬浮窗 WindowManager 操作、debounce/postDelayed | 绝不阻塞：无 sleep、无网络、无 IO |
-| `ChatCaptureService.worker` | `newFixedThreadPool(2)` | A：`judge()`；B：`draftAndRank()` 与 `fillInput()`（内含 sleep 300/150ms） | 结果一律 `main.post{}` 回主线程渲染；服务销毁后提交被静默丢弃 |
-| `SettingsActivity.worker` | `newSingleThreadExecutor` | 「连通测试」`analyze()` | `onDestroy` 里 shutdownNow |
-| 状态变量 | — | `lastSignature`、`analyzing`、`pendingSnapshot`、`currentSnapshot`(@Volatile)、`activePkg`、`foregroundPkg` | 只在主线程读写（`currentSnapshot` 例外，标注了 @Volatile） |
+| 主线程（`Handler(Looper.getMainLooper())`，代码里叫 `main`） | 1 | 所有无障碍回调、`maybeCapture`、悬浮窗 WindowManager 操作、debounce/postDelayed、ScreenCapture 的截屏入口与回调 | 绝不阻塞：无 sleep、无网络、无 IO |
+| `ChatCaptureService.worker` | `newFixedThreadPool(2)` | A：`JudgeClient.judge()`；B：`ReplyClient.draft()` + `JudgeClient.rank()`、`fillInput()`（内含 sleep 300/150ms）、`MlKitOcr.warmUp()`、`KbStore.saveOrMergeContact()` | 结果一律 `main.post{}` 回主线程渲染；服务销毁后提交被静默丢弃 |
+| OCR 链（`capture/ocr/`） | ML Kit 内部线程池 | `MlKitOcr.recognize()` 的活跑在 ML Kit Task 上，完成回调经它自己的 `main` Handler 回主线程；`ScreenCapture.capture()` 主线程进、主线程出（内部 `service.mainExecutor` + 超时 `removeCallbacks`），限频 ≥1s、失败退避；`ocrBusy`/`lastOcrSignature` 在服务里防重入与去重 | 截屏前先隐藏悬浮窗、回调里恢复 |
+| `SettingsActivity.worker` | `newSingleThreadExecutor` | 三张接口卡的「测试判断 / 测试回复 / 测试视觉」 | `onDestroy` 里 shutdownNow |
+| 状态变量 | — | `lastSignature`、`analyzing`、`pendingSnapshot`、`currentSnapshot`(@Volatile)、`activePkg`、`foregroundPkg`、`ocrBusy`、`lastOcrSignature` | 只在主线程读写（`currentSnapshot` 例外，标注了 @Volatile） |
 
 ## 故障排查入口
 
@@ -276,12 +278,15 @@ adb shell uiautomator dump /sdcard/k.xml && adb pull /sdcard/k.xml   # 核对节
 | `overlay: toggle expanded=true x=… y=… saved=(…)` | 面板展开/收起与坐标 |
 | `fill: setText readback=… want=…` / `fill: paste=… readback=…` | 填回三级兜底的实际结果 |
 | `judge failed: …` | 判断请求异常，人话错误随后经 `showError` 上悬浮窗 |
+| `ocr failed: …` / `ocr crop failed: …` | ML Kit 识别 / 气泡裁剪异常（`capture/ocr/MlKitOcr.kt`，同 TAG） |
+| `takeScreenshotOfWindow unavailable: …` | 截屏 API 在该设备不可用（`ScreenCapture`；Android 12+ 走 ofWindow 变体，更早整屏） |
+| `appendLog contact=… added=… overlap=… ok=…` / `kb cleared` | 知识库写入 / 清空（`core/kb/KbStore.kt`；**联系人不会自动建**，靠气泡菜单手动存） |
 
 排查树：
 
 - **气泡不出现** → ① 无障碍是否启用（上面那条 settings 命令）② 悬浮窗权限 ③ 前台包名在不在 `adapters` ④ 是否真在聊天窗（`extract` 返回 null 就永远不显示，日志里连 `snapshot[...]` 都没有）。
 - **微信读不到消息** → 伪装类名/包名是否被改（Manifest 的 `android:name`、`MainActivity.a11yComponent`、`@xml/config_disguised` 三处必须一致）；微信升级后失效是已知风险，先用真机复核 `id/bkl` 是否还在。
-- **不自动分析** → 最新一条是否对方发的（`latestFrom == "other"`）、`auto_analyze` 是否开、白名单是否把标题滤掉、密钥是否已设（未设给「未设置 OpenCode 密钥」）。
+- **不自动分析** → 最新一条是否对方发的（`latestFrom == "other"`）、`auto_analyze` 是否开、白名单是否把标题滤掉、判断接口密钥是否已设（未设会提示「未设置判断接口密钥，去设置里填」）；`ocr_auto_analyze` 关掉时 OCR 模式也不会自动分析。
 - **接口报错对照（v1.4 三路配置后）** → 文案自带路由前缀（`判断接口 HTTP 401：…` / `回复接口 …`，来自 `HttpJson.ApiException`）；`400 MissingSessionID`=回复路地址是 opencode.ai 但没带 `x-opencode-session`（正常由 `Prefs.opencodeSession` 自动带上，只有地址域写错时才会丢）；`403 + error code 1010`=UA 被 Cloudflare 拦（只有 opencode.ai 主机注入自述 UA，别把 base 写成裸 IP）；`402`=Zen 余额不足（付费模型；免费档用 `jev-1.13-free`）；`403 FreeTierError`=免费 chat 模型只能在 OpenCode 客户端内用（Jev 走 `/zen/v1/systemone` 不受限）。
 - **同内容不重复分析**是**特性**：气泡被 ROM 杀掉只会补窗（`showIdle`），不会重新烧 token。
 - **服务被杀 / 气泡消失** → 前台保活 + 自启动 + 省电无限制三项都要；HyperOS 上仍可能被杀，重连后 900ms 补偿自动补窗，再交互一次即自愈。
