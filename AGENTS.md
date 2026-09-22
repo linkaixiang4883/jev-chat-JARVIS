@@ -52,8 +52,8 @@
 ```bash
 ./gradlew assembleDebug     # Windows 用 gradlew.bat；产物 app/build/outputs/apk/debug/app-debug.apk
 export JEV_KEYSTORE_PROPS=D:/work/keys/jev/jev-release.properties   # 本机签名材料（仓库外；见下）
-./gradlew assembleRelease   # 产物 app/build/outputs/apk/release/app-release.apk（已归档 apk/jev-assistant-v1.3-release.apk）
-adb install -r apk/jev-assistant-v1.3-release.apk
+./gradlew assembleRelease   # 产物 app/build/outputs/apk/release/app-release.apk（已归档 apk/jev-assistant-v1.4-release.apk）
+adb install -r apk/jev-assistant-v1.4-release.apk
 ```
 
 - **签名材料在仓库外**：`D:\work\keys\jev\{jev-release.p12, jev-release.properties}`（PKCS12，alias `jev`；properties 含口令，**不许进仓库/日志/git**）。仓库里备了 `env.ps1`（已 gitignore）导出 `JEV_KEYSTORE_PROPS`；bash 用 `export JEV_KEYSTORE_PROPS=D:/work/keys/jev/jev-release.properties`。
