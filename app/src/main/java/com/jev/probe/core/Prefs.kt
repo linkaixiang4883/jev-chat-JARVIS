@@ -198,6 +198,7 @@ class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
         val base = judgeBaseUrl.trim().trimEnd('/')
         return when (judgeProvider) {
             PROVIDER_TYPESAFE -> "$base/v1/systemone"
+            PROVIDER_OPENCODE_ZEN -> "$base/zen/v1/systemone"
             PROVIDER_CUSTOM -> judgeBaseUrl.trim()   // user supplies the full URL
             else -> "$base/alpha/decisions"
         }
@@ -222,6 +223,19 @@ class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
     /** Readiness gate: the judge route is the one that must be configured. */
     fun hasKey(): Boolean = judgeKey.isNotBlank()
 
+    /**
+     * opencode.ai 的会话 id：判断（Zen）与回复（Go）请求都带 `x-opencode-session` ——
+     * Go 端缺它会 400 MissingSessionID。首次读取即生成并落盘，值只需不透明且稳定。
+     */
+    val opencodeSession: String
+        get() {
+            val cur = sp.getString(K_OPENCODE_SESSION, "").orEmpty()
+            if (cur.isNotBlank()) return cur
+            val gen = java.util.UUID.randomUUID().toString()
+            sp.edit().putString(K_OPENCODE_SESSION, gen).apply()
+            return gen
+        }
+
     companion object {
         private const val TAG = "JEVASSIST"
 
@@ -240,6 +254,7 @@ class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
         private const val K_VISION_BASE = "vision_base_url"
         private const val K_VISION_KEY = "vision_key"
         private const val K_VISION_MODEL = "vision_model"
+        private const val K_OPENCODE_SESSION = "opencode_session"
         private const val K_CTX_ENABLED = "context_enabled"
         private const val K_CTX_COUNT = "context_history_count"
         private const val K_AUTO_SUMMARY = "auto_summary"
@@ -258,6 +273,15 @@ class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
         const val PROVIDER_OPENROUTER = "openrouter"
         const val PROVIDER_TYPESAFE = "typesafe"
         const val PROVIDER_CUSTOM = "custom"
+
+        // 本 fork 加的两个预设：OpenCode Zen 的免费 Jev（判断）/ OpenCode Go 的起草（回复）。
+        // 实测（2026-09-22）：Zen 的 /zen/v1/systemone 对普通客户端开放（model jev-1.13-free 免费）；
+        // Go 的 chat/completions 缺 x-opencode-session 会 400；opencode.ai 两域都必须自述 UA（否则 Cloudflare 1010）。
+        const val PROVIDER_OPENCODE_ZEN = "opencode-zen"
+        const val DEFAULT_JUDGE_BASE_OPENCODE_ZEN = "https://opencode.ai"
+        const val DEFAULT_JUDGE_MODEL_OPENCODE_ZEN = "jev-1.13-free"
+        const val OPENCODE_GO_BASE = "https://opencode.ai/zen/go/v1"
+        const val OPENCODE_GO_MODEL = "glm-5.3-flash"
 
         const val OCR_MLKIT = "mlkit"
         const val OCR_VISION = "vision"

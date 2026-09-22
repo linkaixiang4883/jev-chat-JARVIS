@@ -95,7 +95,7 @@ class JudgeClient(private val prefs: Prefs) {
             .put("model", prefs.judgeModel)
             .put("state", state)
             .put("questions", questions)
-        val resp = HttpJson.post(url, prefs.judgeKey, body, Route.JUDGE, HttpJson.headersFor(url))
+        val resp = HttpJson.post(url, prefs.judgeKey, body, Route.JUDGE, HttpJson.headersFor(url, prefs.opencodeSession))
         return resp.optJSONObject("answers") ?: JSONObject()
     }
 

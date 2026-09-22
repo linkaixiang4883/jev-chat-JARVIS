@@ -113,11 +113,32 @@ object HttpJson {
         } catch (_: Exception) { "" }
     }
 
-    /** OpenRouter wants attribution headers; other hosts reject unknown ones politely. */
-    fun headersFor(url: String): Map<String, String> =
-        if (url.contains("openrouter.ai", ignoreCase = true))
-            mapOf("HTTP-Referer" to "https://jev-assistant.local", "X-Title" to "Jev Assistant")
-        else emptyMap()
+    /** 自述 UA：opencode.ai 会拦掉库默认 UA（实测 Cloudflare error code 1010 → 403）。 */
+    const val USER_AGENT = "jev-assistant-android/1.4"
+
+    /** opencode.ai 的会话头（OpenCode Go 端缺它 → 400 MissingSessionID）。 */
+    const val HEADER_SESSION = "x-opencode-session"
+
+    /**
+     * 按目标主机给出的请求头：
+     *  - OpenRouter：署名头（HTTP-Referer / X-Title）。
+     *  - opencode.ai（Zen 判断 / Go 回复）：自述 UA + `x-opencode-session`
+     *    （Zen 的判断端点不需要 session，但带上无害；Go 必须带）。
+     *  - 其它主机：空（未知头有的站会直接拒）。
+     */
+    fun headersFor(url: String, sessionId: String = ""): Map<String, String> {
+        val u = url.lowercase()
+        return when {
+            u.contains("openrouter.ai") ->
+                mapOf("HTTP-Referer" to "https://jev-assistant.local", "X-Title" to "Jev Assistant")
+            u.contains("opencode.ai") -> {
+                val h = mutableMapOf("User-Agent" to USER_AGENT)
+                if (sessionId.isNotBlank()) h[HEADER_SESSION] = sessionId
+                h
+            }
+            else -> emptyMap()
+        }
+    }
 
     /** Human-readable transport failures (no key material ever appears here). */
     private fun describe(e: Exception): String {

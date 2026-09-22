@@ -22,8 +22,8 @@ android {
         applicationId = "com.jev.probe"
         minSdk = 28
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
 
         // ML Kit's bundled Chinese recognizer ships native libs for every ABI.
         // The target phones are arm64, so keep only that one — the other three
@@ -78,6 +78,4 @@ dependencies {
     // On-device OCR. The *bundled* Chinese model (not the play-services variant):
     // it works on phones with no Google Play services and needs no model download.
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
-    // 本 fork 的单测依赖（JevEndpoints 路由层单测）；仅测试期，不进 APK
-    testImplementation("junit:junit:4.13.2")
 }

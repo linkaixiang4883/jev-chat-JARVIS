@@ -52,7 +52,7 @@ class VisionClient(private val prefs: Prefs) {
             .put("model", prefs.visionModel)
             .put("messages", messages)
             .put("temperature", 0.0)
-        val resp = HttpJson.post(url, prefs.effectiveVisionKey(), body, Route.VISION, HttpJson.headersFor(url))
+        val resp = HttpJson.post(url, prefs.effectiveVisionKey(), body, Route.VISION, HttpJson.headersFor(url, prefs.opencodeSession))
         return resp.optJSONArray("choices")?.optJSONObject(0)
             ?.optJSONObject("message")?.optString("content") ?: ""
     }
