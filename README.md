@@ -8,11 +8,11 @@
 
 [![Stars](https://img.shields.io/github/stars/jev-chat/jev-chat-jarvis?style=flat-square&logo=github&label=Stars)](https://github.com/jev-chat/jev-chat-jarvis/stargazers)
 [![Forks](https://img.shields.io/github/forks/jev-chat/jev-chat-jarvis?style=flat-square&logo=github&label=Forks)](https://github.com/jev-chat/jev-chat-jarvis/forks)
-[![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-v1.4-1f6feb?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-v1.5-1f6feb?style=flat-square)](CHANGELOG.md)
 [![Android](https://img.shields.io/badge/Android-9%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](#快速开始)
 [![License](https://img.shields.io/github/license/jev-chat/jev-chat-jarvis?style=flat-square)](LICENSE)
 
-[官网](https://chatjevs.com) · [下载 APK](apk/jev-assistant-v1.4-release.apk) · [历史版本](https://github.com/jev-chat/jev-chat-jarvis/releases) · [更新日志](CHANGELOG.md) · [macOS 版](https://github.com/jev-chat/jev-chat-mac) · [Windows 版](https://github.com/jev-chat/jev-chat-windows)
+[官网](https://chatjevs.com) · [下载 APK](apk/jev-assistant-v1.5-release.apk) · [历史版本](https://github.com/jev-chat/jev-chat-jarvis/releases) · [更新日志](CHANGELOG.md) · [macOS 版](https://github.com/jev-chat/jev-chat-mac) · [Windows 版](https://github.com/jev-chat/jev-chat-windows)
 
 </div>
 
@@ -56,7 +56,7 @@
 - **发送权永远在你手里。** 程序只把回复填进输入框，从不自动发送，不碰转账 / 红包 / 收款。
 - **一套内核，多平台。** 微信、QQ、X 真机跑通，飞书靠 OCR 补正文。新增一个 App 只需写一个几十行的适配器。
 - **它认识你的人和事。** 本地知识库与联系人档案，分析时自动带上命中的笔记和这个人的历史，回复不会和你的设定打架。
-- **接口自己配。** 判断 / 回复 / 视觉三路分别可填，用你自己的密钥和额度，不经过任何中间服务器。本 fork 另加两套预设：**判断选「OpenCode Zen」**（`/zen/v1/systemone`，`jev-1.13-free` 免费档，一把 OpenCode key 即可）、**回复选「OpenCode Go」**（`/zen/go/v1`，默认 `glm-5.3-flash`）。
+- **接口自己配。** 判断 / 回复 / 视觉三路分别可填，用你自己的密钥和额度，不经过任何中间服务器。本 fork 另加三套预设：**判断选「OpenCode Zen」**（`/zen/v1/systemone`，`jev-1.13-free` 免费档，一把 OpenCode key 即可）、**回复与视觉选「OpenCode Go」**（`/zen/go/v1`，默认模型 `deepseek-flash` —— 实测文本与视觉通用，起草候选和截图识别兜底共用同一把钥匙同一个模型）。
 - **隐私在本机。** 密钥存 App 私有空间，聊天内容只在分析那一刻发给你配置的接口，不落盘、不进日志。
 
 ## 平台支持

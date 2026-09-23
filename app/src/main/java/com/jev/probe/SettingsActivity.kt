@@ -213,20 +213,22 @@ class SettingsActivity : AppCompatActivity() {
         // --- 视觉接口 ---
         val visionCard = card()
         visionCard.addView(cardTitle("视觉接口（OCR 用，可先不填）"))
-        visionCard.addView(text("读不到控件树的 App 走截图识别。B 阶段才用到，现在填不填都不影响。", 12f, sub))
+        visionCard.addView(text("读不到控件树的 App 走截图识别。选「OpenCode Go」预设可直接复用你的 OpenCode 密钥与额度（模型 deepseek-flash，文本与视觉通用）。", 12f, sub))
 
         val visionBaseEdit = edit(prefs.visionBaseUrl, Prefs.DEFAULT_VISION_BASE)
         val visionModelEdit = edit(prefs.visionModel, Prefs.DEFAULT_VISION_MODEL)
         val visionIdx = when (prefs.visionBaseUrl.trim().trimEnd('/')) {
             Prefs.DEFAULT_VISION_BASE -> 0
             Prefs.DASHSCOPE_BASE -> 1
-            else -> 2
+            Prefs.OPENCODE_GO_BASE -> 2
+            else -> 3
         }
         visionCard.addView(pills(
-            listOf("OpenRouter", "通义兼容", "自定义"), visionIdx) { idx ->
+            listOf("OpenRouter", "通义兼容", "OpenCode Go", "自定义"), visionIdx) { idx ->
             when (idx) {
                 0 -> { visionBaseEdit.setText(Prefs.DEFAULT_VISION_BASE); visionModelEdit.setText(Prefs.DEFAULT_VISION_MODEL) }
                 1 -> { visionBaseEdit.setText(Prefs.DASHSCOPE_BASE); visionModelEdit.setText(Prefs.DASHSCOPE_VISION_MODEL) }
+                2 -> { visionBaseEdit.setText(Prefs.OPENCODE_GO_BASE); visionModelEdit.setText(Prefs.OPENCODE_GO_VISION_MODEL) }
             }
         })
         visionCard.addView(label("Base URL"))

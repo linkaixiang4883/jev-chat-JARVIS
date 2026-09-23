@@ -52,8 +52,8 @@
 ```bash
 ./gradlew assembleDebug     # Windows 用 gradlew.bat；产物 app/build/outputs/apk/debug/app-debug.apk
 export JEV_KEYSTORE_PROPS=D:/work/keys/jev/jev-release.properties   # 本机签名材料（仓库外；见下）
-./gradlew assembleRelease   # 产物 app/build/outputs/apk/release/app-release.apk（已归档 apk/jev-assistant-v1.4-release.apk）
-adb install -r apk/jev-assistant-v1.4-release.apk
+./gradlew assembleRelease   # 产物 app/build/outputs/apk/release/app-release.apk（已归档 apk/jev-assistant-v1.5-release.apk）
+adb install -r apk/jev-assistant-v1.5-release.apk
 ```
 
 - **签名材料在仓库外**：`D:\work\keys\jev\{jev-release.p12, jev-release.properties}`（PKCS12，alias `jev`；properties 含口令，**不许进仓库/日志/git**）。仓库里备了 `env.ps1`（已 gitignore）导出 `JEV_KEYSTORE_PROPS`；bash 用 `export JEV_KEYSTORE_PROPS=D:/work/keys/jev/jev-release.properties`。
@@ -79,7 +79,7 @@ python -m unittest discover -s tools/jev/tests -v   # provider 路由 / 请求�
 
 ## 当前状态
 
-v1.4（versionCode 5）：**上游 v1.3 已合并**（三路接口可配 judge/reply/vision、知识库 + 关联上下文、**OCR 兜底**（ML Kit 中文离线，APK 27M、arm64-only）、官网 `site/`），并在其上加了本 fork 的**两个预设**：**判断 = OpenCode Zen**（`/zen/v1/systemone`，`jev-1.13-free` 免费）、**回复 = OpenCode Go**（`/zen/go/v1`，`glm-5.3-flash`，请求带 `x-opencode-session` + 自述 UA）。已用仓库外密钥签名（证书 SHA-256 `f190d62d…`）并装到测试机（MI 8 UD / Android 9）；归档 `apk/jev-assistant-v1.4-release.apk`（同目录的 `apk/jev-assistant-v1.3-release.apk` 是上游官方包）。微信/QQ/X 三线实测结论来自 v1.2；v1.3 的 OCR/知识库/三路配置**未真机验证**。
+v1.5（versionCode 6）：**上游 v1.3 及其后 15 个提交已合并**（三路接口可配 judge/reply/vision、知识库 + 关联上下文、**OCR 兜底**（ML Kit 中文离线，APK 25.8M、arm64-only）、隐私政策入口 + 官网 `site/`），并在其上加了本 fork 的**三套预设**：**判断 = OpenCode Zen**（`/zen/v1/systemone`，`jev-1.13-free` 免费）、**回复与视觉 = OpenCode Go**（`/zen/go/v1`，默认模型 **`deepseek-flash`** —— 实测 2026-09-23 真图识别 / 中文转写 / 纯文本起草三项全对，两路共用；备选 `glm-5.3-flash`、`deepseek-v4-flash-vision-exp`）。请求带 `x-opencode-session` + 自述 UA。已用仓库外密钥签名（证书 SHA-256 `f190d62d…`）并装到测试机（MI 8 UD / Android 9）；归档 `apk/jev-assistant-v1.5-release.apk`（同目录 v1.4 = 上一版、v1.3 = 上游官方包）。微信/QQ/X 三线实测结论来自 v1.2；v1.3 起新增的 OCR / 知识库 / 三路配置 / 视觉预设**未真机验证**。
 
 ## 架构与数据流
 
@@ -124,8 +124,10 @@ capture/ChatCaptureService.fillInput(text)   （worker 线程，含 sleep 校验
   opencode-zen → $judge_base_url/zen/v1/systemone       model jev-1.13-free（免费；本 fork 预设）
   custom       → 地址栏按原样 POST（要自带完整路径）
 回复（ReplyClient） $reply_base_url + /chat/completions（OpenAI 兼容）；本 fork 预设 OpenCode Go：
-  https://opencode.ai/zen/go/v1 → /chat/completions，model glm-5.3-flash
-视觉（VisionClient） $vision_base_url + /chat/completions（image_url 内容块，OCR 兜底用）
+  https://opencode.ai/zen/go/v1 → /chat/completions，model deepseek-flash（文本与视觉通用）
+视觉（VisionClient） $vision_base_url + /chat/completions（image_url 内容块，OCR 兜底用）；本 fork 预设 OpenCode Go：
+  https://opencode.ai/zen/go/v1 → /chat/completions，model deepseek-flash（与回复路共用；实测 2026-09-23 真图识别 /
+  中文转写 / 纯文本起草三项全对；备选 glm-5.3-flash、deepseek-v4-flash-vision-exp）
 ```
 
 - 请求体形状不变：判断/排序 `{model,state,questions} → {model,answers,usage}`；回复 `{model,messages[],temperature} → choices[0].message.content`。
@@ -234,8 +236,8 @@ HTTP 行为：连接 15s / 读 25s；429、529 退避重试 3 次（500ms×2^att
 |---|---|
 | `judge_provider` | 判断路 provider：`openrouter`（默认）/ `typesafe` / **`opencode-zen`（本 fork 预设，免费 `jev-1.13-free`）** / `custom` |
 | `judge_base_url` / `judge_key` / `judge_model` | 判断路地址 / 密钥 / 模型（预设各自带默认；`custom` 要自带完整 URL） |
-| `reply_base_url` / `reply_key` / `reply_model` | 回复路；尾部自动拼 `/chat/completions`。**本 fork 预设 `https://opencode.ai/zen/go/v1` + `glm-5.3-flash`**；key 留空继承判断路 |
-| `vision_base_url` / `vision_key` / `vision_model` | 视觉路（OCR 兜底用；key 留空继承回复路） |
+| `reply_base_url` / `reply_key` / `reply_model` | 回复路；尾部自动拼 `/chat/completions`。**本 fork 预设 `https://opencode.ai/zen/go/v1` + `deepseek-flash`**；key 留空继承判断路 |
+| `vision_base_url` / `vision_key` / `vision_model` | 视觉路（OCR 兜底用；key 留空继承回复路）。**本 fork 预设 OpenCode Go：`/zen/go/v1` + `deepseek-flash`（与回复路共用同一模型）**（设置页视觉卡第 3 档 pills） |
 | `opencode_session` | opencode.ai 的 `x-opencode-session`：首次读取生成 UUID 落盘（Go 缺它 → 400；判断端点不需要，带上无害） |
 | `context_enabled` / `context_history_count` / `auto_summary` | 知识库与历史：是否记录 / 条数 / 自动摘要 |
 | `ocr_engine` / `ocr_unknown_apps` / `ocr_fallback` / `ocr_auto_analyze` | OCR 兜底：引擎（mlkit/vision）、未适配 App 是否用、读不到正文时兜底、OCR 模式自动分析 |
@@ -300,9 +302,9 @@ adb shell uiautomator dump /sdcard/k.xml && adb pull /sdcard/k.xml   # 核对节
 - **群聊**：按一对一关系分析，「对方」与 `relationship` 对群聊不准。
 - **密钥存储**：明文 SharedPreferences（App 私有），换 EncryptedSharedPreferences 是既定后续。
 - **TypeSafe 直连预设未实测**：`api.typesafe.ai/v1/systemone`（上游内置预设之一）本机没有 `TYPESAFE_API_KEY`，未真机验证过 —— 首次连通测试即验收。
-- **升级路径**：v1.2 → 上游 v1.3 有一次性迁移（`openrouter_key` → `judge_key`）；但**本 fork 中间那版 v1.3（键名 `opencode_key`）不在迁移范围** → 从它升到 v1.4 需要在设置里重填一次 key。v1.4 包已归档 `apk/jev-assistant-v1.4-release.apk`（本 fork 签名）；同目录 `apk/jev-assistant-v1.3-release.apk` 是**上游官方包**（作者签名，两者签名不同，换装要先卸载）。
-- **本 fork 与上游的差异面**（下次合并上游时逐条对照，别弄丢）：minSdk 28（上游 30）；判断 `opencode-zen` 与回复 `OpenCode Go` 两个预设（`Prefs` 常量 + `SettingsActivity` 的 pills/`providerOf`/`resolveJudgeProvider`/`expandJudgeUrl`/`defaultJudge*`）；`HttpJson.headersFor` 的 UA + `x-opencode-session` 注入与 `Prefs.opencodeSession`；`tools/jev/` 的 provider 参数（zen/typesafe + `--provider`）；签名密钥在仓库外、`apk/` 里多一个 v1.4 包。
-- **OpenCode Zen 免费档**：`jev-1.13-free` 限时免费、随时可能调整（被关时切 TypeSafe 直连预设或给 Zen 充值）；回复路走 Go 吃订阅额度（`glm-5.3-flash` 每月 $60 档）。
+- **升级路径**：v1.2 → 上游 v1.3 有一次性迁移（`openrouter_key` → `judge_key`，只跑一次、**不覆盖已有值**）；但**本 fork 中间那版 v1.3（键名 `opencode_key`）不在迁移范围** → 从它升上来要在设置里重填一次 key。**本 fork 内部（v1.4 → v1.5）同签名覆盖安装，key / 关系描述 / 白名单 / 知识库全部保留**（全仓没有清主配置的代码；`.clear()` 只出现在设置页测试用的 scratch 实例上）。`apk/` 里 v1.5、v1.4 是本 fork 签名，`v1.3` 是**上游官方包**（作者签名，与我们的包互换要先卸载 —— 卸载会清数据）。
+- **本 fork 与上游的差异面**（下次合并上游时逐条对照，别弄丢）：minSdk 28（上游 30）；**判断 `opencode-zen`、回复与视觉 `OpenCode Go` 三个预设**（`Prefs` 常量含 `OPENCODE_GO_VISION_MODEL`，`SettingsActivity` 的 pills/`providerOf`/`resolveJudgeProvider`/`expandJudgeUrl`/`defaultJudge*` + 视觉卡 `visionIdx` 第 3 档）；`HttpJson.headersFor` 的 UA + `x-opencode-session` 注入与 `Prefs.opencodeSession`；`tools/jev/` 的 provider 参数（zen/typesafe + `--provider`）；签名密钥在仓库外、`apk/` 里多出 v1.4 / v1.5 两个包。
+- **OpenCode Zen 免费档**：`jev-1.13-free` 限时免费、随时可能调整（被关时切 TypeSafe 直连预设或给 Zen 充值）；回复与视觉走 Go 吃订阅额度（默认 `deepseek-flash`，每月 $60 档）。
 - **OCR 兜底在 Android 9 上不可用**：`AccessibilityService.takeScreenshot` 是 API 30+，本机测试机（MI 8 / SDK 28）跑不到 OCR 路径（编译能过、运行会失败）——要在 28 上用 OCR 得另找方案。
 - **伪装服务**：微信一旦改混淆策略即失效 —— 本项目最大的外部依赖风险。
 - **国产 ROM 保活**：前台服务 + 自启动 + 省电无限制仍可能被杀，接受「短暂消失、自愈」。

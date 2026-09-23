@@ -2,6 +2,31 @@
 
 格式：每版按 新增 / 改进 / 修复 / 已知限制 / 下载 归类，人话版，不是提交列表。
 
+## v1.5 — 2026-09-23
+
+**新增**
+- 本 fork 的 OpenCode 预设补齐三路：**判断选「OpenCode Zen」**（`jev-1.13-free` 免费档）、**回复与视觉选「OpenCode Go」**（默认模型 `deepseek-flash`，实测文本与视觉通用 —— 起草候选和截图识别兜底共用同一把密钥同一个模型）。一把 OpenCode 密钥就能三路全通。
+- 并入上游同期更新：设置页新增「关于与隐私」分区、官网隐私政策页（`privacy.html`）、贡献者名单。
+
+**改进**
+- 截图识别不再需要单独找一家视觉服务商：视觉接口也能选 OpenCode Go 预设，密钥留空自动继承回复 / 判断接口的密钥。
+
+**已知限制**
+- 截图识别（OCR / 视觉）需要 Android 11 及以上：无障碍截屏是 API 30+ 的能力，Android 9 / 10 上这条路走不通。
+- 从本 fork 更早的 v1.3 预览版升级要重填一次密钥（那版把密钥存在 `opencode_key`，不在自动迁移范围内）。
+
+**下载**：[jev-assistant-v1.5-release.apk](https://github.com/linkaixiang4883/jev-chat-JARVIS/raw/main/apk/jev-assistant-v1.5-release.apk)
+
+## v1.4 — 2026-09-22
+
+**新增**
+- 并入上游 v1.3 的全部内容（接口三路可配、知识库与关联上下文、OCR 兜底、官网），并在其上加两套 OpenCode 预设：判断 = OpenCode Zen（免费 `jev-1.13-free`）、回复 = OpenCode Go。
+
+**已知限制**
+- 与上游官方 v1.3 包签名不同（本 fork 用自己的密钥签名），从官方包换过来要先卸载。
+
+**下载**：[jev-assistant-v1.4-release.apk](https://github.com/linkaixiang4883/jev-chat-JARVIS/raw/main/apk/jev-assistant-v1.4-release.apk)
+
 ## v1.3 — 2026-09-22
 
 **新增**

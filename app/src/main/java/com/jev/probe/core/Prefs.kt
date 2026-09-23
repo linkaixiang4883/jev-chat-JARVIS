@@ -281,7 +281,11 @@ class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
         const val DEFAULT_JUDGE_BASE_OPENCODE_ZEN = "https://opencode.ai"
         const val DEFAULT_JUDGE_MODEL_OPENCODE_ZEN = "jev-1.13-free"
         const val OPENCODE_GO_BASE = "https://opencode.ai/zen/go/v1"
-        const val OPENCODE_GO_MODEL = "glm-5.3-flash"
+        // Go 的通用默认模型：实测（2026-09-23）同时支持视觉与文本 —— 纯色识别 / 中文转写 / 纯文本起草三项全对，
+        // 所以回复与视觉两路共用它（少配一个模型）。备选：glm-5.3-flash（能看图、无推理开销、token 更省）、
+        // deepseek-v4-flash-vision-exp（名字里就声明视觉）。
+        const val OPENCODE_GO_MODEL = "deepseek-flash"
+        const val OPENCODE_GO_VISION_MODEL = "deepseek-flash"
 
         const val OCR_MLKIT = "mlkit"
         const val OCR_VISION = "vision"
